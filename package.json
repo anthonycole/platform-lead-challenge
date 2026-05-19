@@ -9,6 +9,7 @@
     "lint": "eslint",
     "db:migrate": "prisma migrate dev",
     "db:studio": "prisma studio",
+    "db:seed": "tsx scripts/seed.ts",
     "test": "vitest run",
     "test:watch": "vitest"
   },
@@ -31,7 +32,8 @@
     "eslint-config-next": "16.2.6",
     "prisma": "^7.8.0",
     "tailwindcss": "^4",
+    "tsx": "^4.22.2",
     "typescript": "^5",
-    "vitest": "^3.2.4"
+    "vitest": "^4.1.6"
   }
 }
