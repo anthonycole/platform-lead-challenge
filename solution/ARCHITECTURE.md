@@ -140,13 +140,80 @@ erDiagram
 
 ## 5. Identity Resolution
 
-*How does the system resolve events to canonical profiles when no single shared key exists?*
+Resolution is the moment the system commits to a position on "is this the same person?" Every later capability — CLTV, segmentation, attribution — inherits the false positives and false negatives baked in here. The resolver is therefore designed to be **deterministic-first, auditable, and reversible**: it prefers strong signals, records why it merged, and never destroys the loser row.
 
-Cover:
-- The resolution algorithm: given an incoming event with a set of signals, how do you find the right profile? What is the lookup order? What happens when signals match different profiles (collision)?
-- Deterministic vs probabilistic signals: how does your model distinguish between a high-confidence match (same phone) and a lower-confidence one (same device, which could be a shared iPad at a studio)?
-- Cascading merges: when a new event links two previously separate profiles, how do you unify them? What happens to their existing events?
-- Merge provenance: what do you record about why two profiles were merged, so the decision can be reviewed or reversed?
-- The real KIC signal landscape includes: `email`, `phone`, `device_id`, `browser_fingerprint`, `shopify_customer_id`, `mindbody_client_id`, `app_user_id`, `fbclid`, `gclid`. How does your model accommodate signals that are short-lived (click IDs) versus stable (platform IDs)?
+### 5.1 The resolution algorithm
+
+For each ingested event ([`resolveAndIngest`](../src/lib/resolver.ts)), the resolver runs five steps inside a single transaction:
+
+1. **Idempotency check.** `(source, external_id)` is the unique key on `Event`. A duplicate webhook returns the existing `customer_id` and short-circuits — no new row, no resolution work. This matters because Shopify and Mindbody both retry on 5xx, and the same order arriving twice must not create two profiles.
+2. **Signal lookup.** Each extracted signal is looked up in `IdentitySignal` by `(type, value)`. Misses return null; hits return the owning customer, with merge chains followed transitively so a hit on a loser row resolves to its current winner.
+3. **Customer selection.** The set of matched customers determines the path:
+    - 0 matches → create a new `Customer`.
+    - 1 match → use it.
+    - 2+ matches with at least one deterministic signal → pick the **oldest** deterministic-matched customer as the winner. Oldest-wins is a tie-break, not a truth claim — it just makes the resolver order-independent: replaying the same events in any order produces the same winner.
+    - 2+ matches from probabilistic signals only → also pick the oldest, but no merge is written; see §5.2.
+    - Probabilistic-only matches when the event also carries a deterministic signal that didn't match anything → create a new customer rather than attach to a shared device. This is the shared-iPad guard.
+4. **Event insert + signal attachment.** The event is written against the chosen `customer_id`. New signals are created; existing signals belonging to other customers are re-pointed to the winner (deterministic only — probabilistic ties don't move).
+5. **Cascading sweep.** After attachment, the resolver scans the winner's deterministic signals for any that still collide with a different active customer, and merges in a loop until no collisions remain (§5.3).
+
+**Worked example — collision (seed event #8, `shopify_order_004`):** Carol exists with `email=carol@example.com`; Bob exists with `phone=+61477777777`. The incoming order carries both. Step 2 returns matches against two different customers. Step 3 picks the older one (Bob) as winner. Step 4 writes the event against Bob and re-points Carol's email signal to him. Step 5 finds no further collisions and stops. One `Merge` row is written with `reason=deterministic_collision:email`. The seeded DB shows exactly this outcome.
+
+### 5.2 Deterministic vs probabilistic signals
+
+The `confidence` column on `IdentitySignal` is what lets the resolver treat "same phone" and "same iPad" differently. The split is per signal type ([`src/lib/signals.ts`](../src/lib/signals.ts)):
+
+| Confidence | Signals | Why |
+|---|---|---|
+| Deterministic | `email`, `phone`, `shopify_customer_id`, `mindbody_client_id`, `app_user_id` | Each is issued or claimed by one person; collisions are real-world rare and almost always indicate the same human. |
+| Probabilistic | `device_id`, `browser_fingerprint` | One device can belong to many people (a studio iPad, a shared household tablet, a refurbished phone). A match is evidence, not proof. |
+
+Two behaviours flow from this:
+
+- **Probabilistic signals never move.** When a probabilistic signal already belongs to customer A and a new event from customer B carries the same value, the signal stays with A. Both customers keep their separate profiles. The seed's guest-checkout scenario (`shopify_order_002`) demonstrates this resolving cleanly when only one customer is in play; if a second real person ever checked out from the same iPad, they'd land on a fresh profile rather than be silently fused into Jane's.
+- **Probabilistic-only matches don't write a `Merge`.** The resolver attaches the event to the oldest matched customer (so the timeline isn't lost), but no provenance row is written, because there's nothing to review or reverse — no claim was made.
+
+The corollary is that **a merge always has a deterministic signal as its trigger**. This is enforced by construction: every `Merge` row's `reason` references the deterministic signal type that caused it, and the corresponding `triggered_by_signal` is non-null.
+
+### 5.3 Cascading merges
+
+A single event can carry signals that don't just connect to one other profile — they can chain. The cascade handles this in a loop:
+
+1. After the immediate merge, the resolver lists every deterministic signal now attached to the winner.
+2. For each, it checks if any *other* active customer also holds that `(type, value)`.
+3. If one is found, that customer is merged into the winner with `reason=cascading_merge:<signal_type>`, and the loop restarts.
+4. Termination is guaranteed because each iteration strictly reduces the number of active customers.
+
+When a loser is absorbed, its `Event` and `IdentitySignal` rows are re-pointed to the winner's `customer_id`, and the loser row is flipped to `status=merged` with `merged_into_id` set. **No history is rewritten.** The original event timestamps, payloads, and external IDs are intact; only the foreign key moves. This is what makes the unified `/api/customers?q=…` timeline correct after a merge without replaying anything.
+
+The loser row is preserved on purpose. A `Customer` with `status=merged` is a forwarding pointer: foreign keys from external systems, audit logs, or downstream consumers that captured the loser ID before the merge still resolve, because `follow_merge_chain` walks `merged_into_id` transitively. This is also what makes a future reversal possible — see §5.4.
+
+### 5.4 Merge provenance
+
+Every merge writes one `Merge` row capturing:
+
+- `winner_customer_id`, `loser_customer_id` — the decision.
+- `triggered_by_signal` — the specific `IdentitySignal` row that caused the collision. Lets a reviewer see *which* email or phone was the link, not just that there was one.
+- `triggered_by_event` — the event being ingested when the merge fired. Anchors the decision to a specific moment in the source-system timeline.
+- `reason` — a short enum-style string: `deterministic_collision:email`, `cascading_merge:phone`, etc. Cheap to filter and aggregate.
+- `resolver_version` — the version of the resolver ([`RESOLVER_VERSION`](../src/lib/resolver.ts)) that made the call. Critical when the rules change: rows written under v1.0.0 can be re-evaluated under v1.1.0 without ambiguity.
+- `created_at` and `reversed_at` (nullable).
+
+Reversal is a forward-only operation, not a delete: the loser row is restored to `status=active`, its events and signals are re-pointed back, and `reversed_at` is stamped. The original `Merge` row stays in place as the historical record. This is the property that makes the system *reviewable* rather than a black box — every merge can be inspected, queried by reason, attributed to a resolver version, and undone without losing the audit trail.
+
+### 5.5 Signal lifetimes: stable IDs vs click IDs
+
+The full KIC signal landscape spans two ends of a spectrum:
+
+| Signal | Lifetime | TTL policy |
+|---|---|---|
+| `email`, `phone` | Long — change occasionally over a customer's life | No expiry; multiple values accrete on one profile |
+| `shopify_customer_id`, `mindbody_client_id`, `app_user_id` | Stable per platform | No expiry; one value per platform per customer |
+| `device_id`, `browser_fingerprint` | Medium — survives sessions, dies on reinstall/new device | No expiry, but probabilistic confidence (§5.2) limits damage |
+| `fbclid`, `gclid` | Short — single ad click, attribution window only | **90-day `expires_at`** set at insert; resolver ignores expired rows in lookup |
+
+The `expires_at` column on `IdentitySignal` is the single mechanism that handles this whole spectrum — same schema, different policy per type. Stable IDs leave it null and live forever. Click IDs are written with `expires_at = now + 90d` and are filtered out of `match_signals` once expired, so a re-used `gclid` six months later can't accidentally fuse two profiles. A scheduled job can hard-delete expired rows for storage hygiene without affecting resolver correctness, because the lookup already treats expired rows as absent.
+
+This matters for KIC specifically because click IDs are the connective tissue between paid acquisition and in-studio booking — the path the current architecture leaks attribution on (§1). They need to participate in resolution during the attribution window, then disappear cleanly so they don't pollute the identity graph as the cookie ecosystem keeps degrading.
 
 ---
