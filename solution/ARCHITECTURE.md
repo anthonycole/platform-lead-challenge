@@ -135,3 +135,18 @@ erDiagram
 - Multi-email case: a customer accretes multiple `email` signal rows under one `Customer` rather than competing for a single column.
 - Guest checkout: a `device_id`-only event still gets a `Customer` row immediately; later events with `email` or `phone` cascade-merge into it via the `Merge` log.
 - Warehouse portability ([§3 Recommendation](#recommendation--stage-it-build--composable)): all four tables are flat, append-friendly, and have no ORM-specific types — Phase 2 reverse-ETL to BigQuery/Clickhouse is a pipeline change, not a re-platform.
+
+---
+
+## 5. Identity Resolution
+
+*How does the system resolve events to canonical profiles when no single shared key exists?*
+
+Cover:
+- The resolution algorithm: given an incoming event with a set of signals, how do you find the right profile? What is the lookup order? What happens when signals match different profiles (collision)?
+- Deterministic vs probabilistic signals: how does your model distinguish between a high-confidence match (same phone) and a lower-confidence one (same device, which could be a shared iPad at a studio)?
+- Cascading merges: when a new event links two previously separate profiles, how do you unify them? What happens to their existing events?
+- Merge provenance: what do you record about why two profiles were merged, so the decision can be reviewed or reversed?
+- The real KIC signal landscape includes: `email`, `phone`, `device_id`, `browser_fingerprint`, `shopify_customer_id`, `mindbody_client_id`, `app_user_id`, `fbclid`, `gclid`. How does your model accommodate signals that are short-lived (click IDs) versus stable (platform IDs)?
+
+---

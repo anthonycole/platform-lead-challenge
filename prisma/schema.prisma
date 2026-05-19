@@ -70,6 +70,7 @@ model Merge {
   triggeredByEventId  String?
   triggeredByEvent    Event?    @relation("MergeByEvent", fields: [triggeredByEventId], references: [id])
   reason              String
+  resolverVersion     String
   createdAt           DateTime  @default(now())
   reversedAt          DateTime?
 
