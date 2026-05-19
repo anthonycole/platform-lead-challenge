@@ -1,0 +1,10 @@
+{
+  "id": "shopify_order_001",
+  "shopify_customer_id": "cust_shopify_001",
+  "email": "jane.doe@example.com",
+  "phone": "+61412345678",
+  "device_id": "device_abc123",
+  "created_at": "2026-04-01T10:00:00Z",
+  "total_price": "89.00",
+  "line_items": [{ "title": "KIC Resistance Band", "quantity": 1 }]
+}
