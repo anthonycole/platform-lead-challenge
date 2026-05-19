@@ -1,23 +1,30 @@
-export type ShopifyOrderPayload = {
-  id: string;
-  shopify_customer_id: string | null;
-  email: string | null;
-  phone: string | null;
-  device_id: string | null;
-  created_at: string;
-  total_price?: string;
-  line_items?: Array<{ title: string; quantity: number }>;
-};
+import { z } from "zod";
 
-export type MindbodyBookingPayload = {
-  id: string;
-  mindbody_client_id: string;
-  client_email: string | null;
-  phone: string | null;
-  class_name: string;
-  scheduled_at: string;
-  studio?: string;
-};
+export const ShopifyOrderPayloadSchema = z.object({
+  id: z.string().min(1),
+  shopify_customer_id: z.string().nullable(),
+  email: z.string().nullable(),
+  phone: z.string().nullable(),
+  device_id: z.string().nullable(),
+  created_at: z.string().datetime({ offset: true }),
+  total_price: z.string().optional(),
+  line_items: z
+    .array(z.object({ title: z.string(), quantity: z.number() }))
+    .optional(),
+});
+
+export const MindbodyBookingPayloadSchema = z.object({
+  id: z.string().min(1),
+  mindbody_client_id: z.string().min(1),
+  client_email: z.string().nullable(),
+  phone: z.string().nullable(),
+  class_name: z.string(),
+  scheduled_at: z.string().datetime({ offset: true }),
+  studio: z.string().optional(),
+});
+
+export type ShopifyOrderPayload = z.infer<typeof ShopifyOrderPayloadSchema>;
+export type MindbodyBookingPayload = z.infer<typeof MindbodyBookingPayloadSchema>;
 
 export type SignalType =
   | "email"
