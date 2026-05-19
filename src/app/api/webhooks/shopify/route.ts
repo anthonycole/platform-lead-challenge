@@ -1,9 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { extractShopifySignals } from "@/lib/signals";
 import { resolveAndIngest } from "@/lib/resolver";
+import { logger } from "@/lib/logger";
 import { ShopifyOrderPayloadSchema } from "@/types/webhooks";
 
+export const runtime = "nodejs";
+
 export async function POST(req: NextRequest) {
+  const requestId = crypto.randomUUID();
+  const log = logger.child({ route: "webhooks/shopify", requestId });
+
   let body: unknown;
   try {
     body = await req.json();
@@ -30,7 +36,15 @@ export async function POST(req: NextRequest) {
     });
     return NextResponse.json({ received: true });
   } catch (err) {
-    console.error("shopify webhook error", err);
+    log.error(
+      {
+        err,
+        source: "shopify",
+        externalId: parsed.data.id,
+        eventType: "order.created",
+      },
+      "shopify webhook failed",
+    );
     return NextResponse.json({ error: "internal error" }, { status: 500 });
   }
 }
