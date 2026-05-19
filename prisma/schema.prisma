@@ -1,13 +1,79 @@
 datasource db {
   provider = "sqlite"
-  url      = env("DATABASE_URL")
 }
 
 generator client {
-  provider = "prisma-client-js"
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
 }
 
 model Customer {
-  id String @id @default(cuid())
+  id           String   @id @default(cuid())
+  status       String   @default("active")
+  mergedIntoId String?
+  mergedInto   Customer?  @relation("CustomerMerge", fields: [mergedIntoId], references: [id])
+  mergedFrom   Customer[] @relation("CustomerMerge")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  signals    IdentitySignal[]
+  events     Event[]
+  mergesWon  Merge[] @relation("MergeWinner")
+  mergesLost Merge[] @relation("MergeLoser")
+
+  @@index([mergedIntoId])
 }
 
+model IdentitySignal {
+  id          String    @id @default(cuid())
+  customerId  String
+  customer    Customer  @relation(fields: [customerId], references: [id])
+  type        String
+  value       String
+  confidence  String
+  firstSeenAt DateTime  @default(now())
+  lastSeenAt  DateTime  @default(now())
+  expiresAt   DateTime?
+
+  mergesTriggered Merge[] @relation("MergeBySignal")
+
+  @@unique([type, value])
+  @@index([customerId])
+  @@index([expiresAt])
+}
+
+model Event {
+  id         String   @id @default(cuid())
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id])
+  source     String
+  externalId String
+  eventType  String
+  occurredAt DateTime
+  receivedAt DateTime @default(now())
+  payload    String
+
+  mergesTriggered Merge[] @relation("MergeByEvent")
+
+  @@unique([source, externalId])
+  @@index([customerId, occurredAt])
+}
+
+model Merge {
+  id                  String    @id @default(cuid())
+  winnerCustomerId    String
+  winner              Customer  @relation("MergeWinner", fields: [winnerCustomerId], references: [id])
+  loserCustomerId     String
+  loser               Customer  @relation("MergeLoser", fields: [loserCustomerId], references: [id])
+  triggeredBySignalId String?
+  triggeredBySignal   IdentitySignal? @relation("MergeBySignal", fields: [triggeredBySignalId], references: [id])
+  triggeredByEventId  String?
+  triggeredByEvent    Event?    @relation("MergeByEvent", fields: [triggeredByEventId], references: [id])
+  reason              String
+  resolverVersion     String
+  createdAt           DateTime  @default(now())
+  reversedAt          DateTime?
+
+  @@index([winnerCustomerId])
+  @@index([loserCustomerId])
+}
