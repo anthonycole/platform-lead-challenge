@@ -24,4 +24,5 @@ These are decisions the brief and `CONTRACTS.md` left open, where I made a call:
 * `resolver_version` is already stamped on every `Merge` row so re-resolutions are auditable; with a production timeline I'd make backfill/replay first-class with a dedicated worker rather than relying on them as emergent properties of the design.
 * More thought and progress due dilligence on build vs buy and TCO
 * More work around activation and marketing; build out the "We missed you" campaign plan.
-* CI/CD Pipelines.
+* Setting up a proper CI/CD pipeline
+* Implementing skills and adding more context and domain knowledge around documentation
