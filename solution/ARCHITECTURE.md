@@ -217,3 +217,37 @@ The `expires_at` column on `IdentitySignal` is the single mechanism that handles
 This matters for KIC specifically because click IDs are the connective tissue between paid acquisition and in-studio booking — the path the current architecture leaks attribution on (§1). They need to participate in resolution during the attribution window, then disappear cleanly so they don't pollute the identity graph as the cookie ecosystem keeps degrading.
 
 ---
+
+## 6. Failure Modes
+
+A webhook service fails in predictable ways: the source retries, sends a malformed payload, or the resolver hits a state it can't reconcile. Each is handled as a first-class case, not an exception.
+
+| Failure mode | Trigger | Containment |
+|---|---|---|
+| **Duplicate delivery** | Source retries on any non-2xx | Idempotency on `(source, external_id)` ([resolver step 1](../src/lib/resolver.ts)) — the duplicate returns the existing `customer_id` and short-circuits, so retries are safe and free. |
+| **Malformed payload** | Schema drift, truncated JSON | Route handler returns **400** on bad JSON or a failed Zod parse ([`route.ts`](../src/app/api/webhooks/shopify/route.ts)) — a 400 tells the source *don't retry*, stopping a poison message from looping forever. |
+| **Mid-resolution crash** | Process dies between writing the event and finishing a merge cascade | All of `resolveAndIngest` runs in one `prisma.$transaction` — event, signals, and `Merge` rows commit or roll back together, so provenance is never orphaned. |
+| **Transient DB error** | Lock contention, connection drop | Handler returns **500** and logs `source`/`externalId`/`eventType` — a 500 tells the source *retry*, and idempotency makes that safe. |
+| **Bad merge** | Two people share a device and get fused | Recovered, not prevented: probabilistic signals never trigger a merge ([§5.2](#52-deterministic-vs-probabilistic-signals)) and every merge writes a reversible `Merge` row ([§5.4](#54-merge-provenance)). |
+
+The line across the table is **4xx vs 5xx as a retry contract**: bad input is the sender's problem (don't retry); anything past a valid payload is ours (retry into the idempotent path). That boundary turns a retrying source into a free at-least-once guarantee.
+
+### 6.2 Logging, recoverability, observability
+
+- **Structured logs** ([`logger.ts`](../src/lib/logger.ts)) — JSON via `pino`, correlated by a per-request `requestId`, with `email`/`phone` redacted at the logger so PII can't leak even when payloads are logged on error.
+- **Replay over recovery** — the `Event` log is append-only and keeps raw payloads, so the worst case (rebuild the graph) is a replay: re-run the idempotent ingest path, no history rewritten. `resolver_version` on each `Merge` makes targeted re-resolution after a rule change possible. Backfill is thus a byproduct of the design, not separate machinery (productionising it is the main "with more time" item — see [NOTES.md](./NOTES.md)).
+- **Resolution-quality observability** — the real question isn't "is the server up?" but "is the resolver merging the right people?" The `Merge` table answers it: queryable by `reason` and `resolver_version`, so a merge-rate spike surfaces a bad rule in SQL before a marketer notices. Metrics ([`metrics.ts`](../src/lib/metrics.ts)) are derived from the event log on read, so they can't drift from it.
+
+**For production:** `/health` + `/ready`, RED metrics on the webhook routes, and a merge-rate anomaly alert — the single most important resolver-health signal. The instrumentation hooks exist; the gap is the exporter and dashboards.
+
+---
+
+## 7. Rollout Strategy
+
+The phased rollout — staging the in-house service into production and the path from there toward the warehouse-native Phase 2 — is detailed in [IMPLEMENTATION_PLAN.md](./IMPLEMENTATION_PLAN.md).
+
+---
+
+## 8. We Missed You
+
+The "We Missed You" re-engagement campaign — detecting lapsed customers from the unified event log and triggering activation — is detailed in [MISSED_YOU_PLAN.md](./MISSED_YOU_PLAN.md).

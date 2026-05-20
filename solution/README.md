@@ -4,8 +4,8 @@ A webhook ingestion service with a unified customer identity layer and an intern
 Shopify and Mindbody events are ingested, resolved to a single canonical customer via shared
 identity signals, and surfaced through a search-driven internal frontend.
 
-For the design rationale see [ARCHITECTURE.md](./solution/ARCHITECTURE.md); for assumptions and
-tradeoffs see [NOTES.md](./solution/NOTES.md).
+For the design rationale see [ARCHITECTURE.md](./ARCHITECTURE.md); for assumptions and tradeoffs
+see [NOTES.md](./NOTES.md).
 
 ## How it works
 
@@ -35,18 +35,18 @@ merged, with the older customer winning and a `Merge` row recording what trigger
 
 The data model is four tables — `Customer`, `IdentitySignal`, `Event`, `Merge` — with the rule
 that **events reference the customer, never the signal**, so the timeline survives every merge.
-Full ER diagram in [ARCHITECTURE.md](./solution/ARCHITECTURE.md#4-data-model).
+Full ER diagram in [ARCHITECTURE.md](./ARCHITECTURE.md#4-data-model).
 
 ## Running it
 
-Requires Node (see [.nvmrc](./.nvmrc)) — run `nvm use` if you use nvm.
+Requires Node (see [.nvmrc](../.nvmrc)) — run `nvm use` if you use nvm.
 
 ```bash
 # 1. Env
 cp .env.example .env
 
-# 2. Install — legacy-peer-deps is set in .npmrc, so a plain install is enough
-npm install
+# 2. Install — peer-deps must be relaxed (Next 16 / React 19 peer ranges)
+npm install --legacy-peer-deps
 
 # 3. Database — apply the schema and generate the Prisma client
 npm run db:migrate
@@ -86,4 +86,4 @@ curl -X POST http://localhost:3000/api/webhooks/mindbody \
 ```
 
 Payload shapes, signal types, and resolution rules are documented in
-[CONTRACTS.md](./CONTRACTS.md).
+[CONTRACTS.md](../CONTRACTS.md).

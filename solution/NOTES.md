@@ -1,26 +1,27 @@
 # Notes
 
 ## Assumptions
-<!-- What assumptions did you make that aren't stated in the brief? -->
+
+These are decisions the brief and `CONTRACTS.md` left open, where I made a call:
+
+* **Deterministic signals outvote probabilistic ones** — a lone `device_id` only matches when no deterministic signal did, so a shared device can't silently merge two people.
+* **Oldest customer wins a merge** — the earlier-created `Customer` stays canonical; the brief doesn't specify a winner.
+* **`(type, value)` is globally unique** — one signal maps to one customer, with no "contested" state (see Tradeoffs).
+* I've built in the browser_fingerprint, app_user_id, fbclid, gclid analytics codes despite them not being a requirement. In my experience it's good to get this data in earlier rather than later.
+* I note that customer names are not included and have intentionally left that out.
+
 
 ## Tradeoffs
-The data model optimises for **reversibility and auditability of identity decisions** at the cost of **richer modelling of identity itself** — the right call for an early-stage SCV where being wrong is the main risk. The specific concessions:
-
-- **`Event.customer_id` is rewritten on merge.** Keeps timeline reads to a single indexed lookup, but the event row is no longer a pure historical fact — reconstructing who owned an event at time T requires the `Merge` table. The alternative (frozen `customer_id`, resolve through merge chains at read) preserves strict immutability at the cost of recursive joins on every customer query.
-- **`(type, value)` is globally unique — one signal → one customer.** Makes lookup O(1) and prevents ambiguity, but forces a merge decision the moment two customers collide on a value. There is no "contested signal" state; the resolver must pick a winner immediately, even when the right answer is "wait for corroboration."
-- **PII lives on signals, not on `Customer`.** Clean expiry/GDPR semantics and natural support for the multi-email case, but no canonical "primary email" without an additional rule layer (recency? source priority?), and every customer-facing read needs a join.
-- **Single confidence enum (`deterministic | probabilistic`).** Cheap and legible, but coarse — `shopify_customer_id` and `email` are both "deterministic" despite different trust profiles, and there's no numeric score to threshold against. Upgrading later is a schema change.
-- **Confidence as a column, not a score, code rule, or source weight.** Alternatives considered: a continuous 0–1 score (more expressive but needs calibration data and turns merge provenance into a vector); hardcoded per-type rules in the resolver (simpler but unqueryable and unportable to the Phase 2 warehouse); source-weighted trust (phone-from-Mindbody > phone-from-guest-checkout — better modelling but doubles taxonomy size). The binary column wins on auditability and warehouse portability at this stage; the natural next step is splitting `confidence` from a `merge_policy` column once a second probabilistic signal type behaves differently from `device_id`.
-- **`expires_at` is overloaded across signal types.** One column, different policy per type (null for platform IDs, 90 days for click IDs). Simple now; becomes a `CASE` statement in every query once a third policy appears.
-- **No `Household` or group entity.** Shared-iPad is handled by *refusing* to merge probabilistic-only matches, not by modelling the household as a first-class thing. Correct for Phase 1; needs a new table the moment marketing wants household-level CLTV.
-- **Warehouse portability prioritised over relational richness.** Flat tables, no ORM-specific types, payload stored as JSON-encoded text (not a native JSON column) — lands cleanly in BigQuery/Clickhouse (the Phase 2 bet), but leaves value on the table in Postgres (no partial indexes on signal types, no DB-enforced enums beyond strings).
-- **`IdentitySignal` has no `source` column.** Considered and dropped: knowing which system first emitted a signal (Shopify vs Mindbody vs app SDK) is useful for the signals panel, but it's recoverable by joining to the earliest associated `Event`. Inference is fragile and the panel will pay the join cost on every render — worth revisiting once the frontend exists.
-- **Lowercase-on-write is a lib invariant, not a DB constraint.** `IdentitySignal.value` is normalised and lowercased in [src/lib/](src/lib/) before insert. SQLite can't express this as a generated column cleanly, so any writer that bypasses the helper silently breaks the search bar. Acceptable while the only writer is the resolver; needs a `CHECK` constraint or trigger if writes ever fan out.
-- **Resolver provenance is deferred, not designed in.** `Merge` records which signal and which event triggered the merge, but not which version of the resolver made the call. A future replay that re-decides historical merges with a newer resolver will have no way to scope itself to "rows decided by version X". Cheap to add later (one nullable column on `Merge`, populated forward from the day the resolver starts stamping it); kept out of v1 to avoid carrying an empty column.
-- **Backfill fidelity is capped by source-system data quality.** Signals not historically captured (e.g. `device_id` pre-SDK rollout) won't resolve as well as live events — historical profiles will be weaker than current ones. Accepted as a property of the input data, not something the model can fix.
+* The data model optimises for **reversibility and auditability of identity decisions** over richer modelling of identity
+* Merging rewrites `Event.customer_id` for fast reads but every merge writes a row to the `Merge` table recording what triggered it, so any decision can be reconstructed and undone. 
+* To keep lookups O(1), `(type, value)` is globally unique — one signal maps to exactly one customer — which is fast and unambiguous but forces a merge decision the instant two customers collide on a value, with no "contested" state to fall back on. 
+* Where the matching evidence is only probabilistic, the resolver declines to merge rather than guess; shared-device cases are handled by refusing the merge instead of introducing a `Household` entity initially. 
+* The identity data itself is deliberately thin. PII lives on signals rather than on `Customer`, so a customer can carry multiple emails cleanly — at the cost of a join on every customer-facing read and no canonical "primary" value without an added rule. *
+* Confidence is a binary enum (`deterministic | probabilistic`) rather than a numeric score: legible and auditable today, where a score or source-weighted trust would be more expressive but needs calibration data we don't yet have. Underpinning all of it, the schema favours warehouse portability over relational richness — flat tables, JSON-as-text payloads, no DB-enforced enums — so it lands cleanly in BigQuery or Clickhouse (the Phase 2 bet), trading away Postgres niceties like partial indexes.
 
 ## What I'd do differently with more time
-<!-- What would change with a full production timeline? -->
-
-- **First-class backfill and replay tooling.** Today, backfill reuses the live webhook path (relying on `(source, external_id)` idempotency) and replay leans on `Event` being append-only with `Customer`/`IdentitySignal`/`Merge` as derived state. Both work, but they're properties of the design rather than features — production would want a dedicated backfill worker, a replay harness, and `resolver_version` stamped on every `Merge` row so re-resolutions are auditable.
-- **Real-time replay path.** Re-resolving 12 months of events is currently batch — measured in hours, not seconds. Fine for algorithm fixes, not for live operator workflows. A streaming replay would let operators trigger re-resolution from the internal tool and see the result inline.
+* Backfill and replay both work today, but only as properties of the design — the idempotent webhook path and the append-only `Event` log.
+* `resolver_version` is already stamped on every `Merge` row so re-resolutions are auditable; with a production timeline I'd make backfill/replay first-class with a dedicated worker rather than relying on them as emergent properties of the design.
+* More thought and progress due dilligence on build vs buy and TCO
+* More work around activation and marketing; build out the "We missed you" campaign plan.
+* CI/CD Pipelines.
