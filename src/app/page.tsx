@@ -1,14 +1,66 @@
-export default function Home() {
+import { loadCustomerView, searchCustomers } from "@/lib/timeline";
+import AppBar from "@/components/AppBar";
+import PageShell from "@/components/PageShell";
+import CustomerProfile from "@/components/CustomerProfile";
+import CustomerResultsList from "@/components/CustomerResultsList";
+import Timeline from "@/components/Timeline";
+import TimelineFilter, { TimelineFilterValue } from "@/components/TimelineFilter";
+import EmptyState from "@/components/EmptyState";
+import NotFoundState from "@/components/NotFoundState";
+
+type SearchParams = Promise<{ q?: string; filter?: string; customerId?: string }>;
+
+function parseFilter(raw: string | undefined): TimelineFilterValue {
+  return raw === "orders" || raw === "bookings" ? raw : "all";
+}
+
+export default async function Home({
+  searchParams,
+}: {
+  searchParams: SearchParams;
+}) {
+  const { q, filter, customerId } = await searchParams;
+  const trimmed = q?.trim() ?? "";
+  const active = parseFilter(filter);
+  const appBar = <AppBar initialQuery={trimmed} />;
+
+  if (customerId) {
+    const view = await loadCustomerView(customerId);
+    if (!view) {
+      return <PageShell appBar={appBar} main={<NotFoundState query={customerId} />} />;
+    }
+    return (
+      <PageShell
+        appBar={appBar}
+        sidebar={
+          <CustomerProfile
+            customer={view.customer}
+            signals={view.signals}
+            events={view.events}
+          />
+        }
+        main={
+          <>
+            <TimelineFilter active={active} />
+            <Timeline events={view.events} filter={active} />
+          </>
+        }
+      />
+    );
+  }
+
+  if (!trimmed) {
+    return <PageShell appBar={appBar} main={<EmptyState />} />;
+  }
+
+  const result = await searchCustomers(trimmed);
+  if (result.kind === "none") {
+    return <PageShell appBar={appBar} main={<NotFoundState query={trimmed} />} />;
+  }
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 dark:bg-zinc-950">
-      <div className="max-w-lg text-center px-8">
-        <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
-          KIC Platform Assessment
-        </h1>
-        <p className="mt-3 text-zinc-500 dark:text-zinc-400">
-          Build your internal tool frontend here. See <code className="text-sm font-mono bg-zinc-100 dark:bg-zinc-800 px-1 py-0.5 rounded">README.md</code> for the assessment details.
-        </p>
-      </div>
-    </div>
+    <PageShell
+      appBar={appBar}
+      main={<CustomerResultsList query={trimmed} results={result.results} />}
+    />
   );
 }

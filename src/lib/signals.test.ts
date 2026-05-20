@@ -20,6 +20,20 @@ describe("normaliseSignal", () => {
     expect(normaliseSignal("phone", "  +61 412 345 678 ")).toBe("+61412345678");
   });
 
+  it("normalises AU-format phone variants to the same E.164 value", () => {
+    const canonical = "+61412345678";
+    expect(normaliseSignal("phone", "0412 345 678")).toBe(canonical);
+    expect(normaliseSignal("phone", "(04) 1234-5678")).toBe(canonical);
+    expect(normaliseSignal("phone", "0412-345-678")).toBe(canonical);
+    expect(normaliseSignal("phone", "+61 (412) 345 678")).toBe(canonical);
+    expect(normaliseSignal("phone", "61412345678")).toBe(canonical);
+  });
+
+  it("returns null for phone with no digits", () => {
+    expect(normaliseSignal("phone", "  -- ")).toBeNull();
+    expect(normaliseSignal("phone", "+")).toBeNull();
+  });
+
   it("trims platform IDs and device_id without lowercasing", () => {
     expect(normaliseSignal("shopify_customer_id", " Cust_001 ")).toBe("Cust_001");
     expect(normaliseSignal("mindbody_client_id", " MB_001 ")).toBe("MB_001");
