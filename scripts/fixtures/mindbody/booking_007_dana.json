@@ -1,0 +1,9 @@
+{
+  "id": "mb_booking_007",
+  "mindbody_client_id": "mb_client_dana",
+  "client_email": "dana@example.com",
+  "phone": "+61433111222",
+  "class_name": "Yoga Flow",
+  "scheduled_at": "2026-02-05T07:30:00Z",
+  "studio": "KIC Fitzroy"
+}

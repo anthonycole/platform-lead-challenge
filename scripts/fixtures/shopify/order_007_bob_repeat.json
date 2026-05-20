@@ -1,0 +1,10 @@
+{
+  "id": "shopify_order_007",
+  "shopify_customer_id": "cust_shopify_003",
+  "email": "bob@example.com",
+  "phone": "+61477777777",
+  "device_id": "device_bob_001",
+  "created_at": "2026-05-08T18:10:00Z",
+  "total_price": "72.00",
+  "line_items": [{ "title": "KIC Skipping Rope", "quantity": 1 }, { "title": "KIC Water Bottle", "quantity": 1 }]
+}

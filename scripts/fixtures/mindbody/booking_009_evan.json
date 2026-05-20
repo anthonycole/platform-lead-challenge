@@ -1,0 +1,9 @@
+{
+  "id": "mb_booking_009",
+  "mindbody_client_id": "mb_client_evan",
+  "client_email": "evan@example.com",
+  "phone": "+61433222333",
+  "class_name": "HIIT",
+  "scheduled_at": "2026-03-15T06:00:00Z",
+  "studio": "KIC Richmond"
+}

@@ -1,0 +1,9 @@
+{
+  "id": "mb_booking_006",
+  "mindbody_client_id": "mb_client_003",
+  "client_email": "carol@example.com",
+  "phone": "+61455555555",
+  "class_name": "Reformer Pilates",
+  "scheduled_at": "2026-05-13T09:30:00Z",
+  "studio": "KIC South Yarra"
+}

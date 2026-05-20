@@ -1,0 +1,13 @@
+{
+  "id": "shopify_order_011",
+  "shopify_customer_id": "cust_shopify_evan",
+  "email": "evan@example.com",
+  "phone": "+61433222333",
+  "device_id": "device_evan_001",
+  "created_at": "2026-02-28T08:30:00Z",
+  "total_price": "210.00",
+  "line_items": [
+    { "title": "KIC Dumbbell Set", "quantity": 1 },
+    { "title": "KIC Foam Roller", "quantity": 1 }
+  ]
+}

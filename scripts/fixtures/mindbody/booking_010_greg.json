@@ -1,0 +1,9 @@
+{
+  "id": "mb_booking_010",
+  "mindbody_client_id": "mb_client_greg",
+  "client_email": "greg@example.com",
+  "phone": "+61433444555",
+  "class_name": "Boxing",
+  "scheduled_at": "2026-03-30T19:00:00Z",
+  "studio": "KIC Richmond"
+}

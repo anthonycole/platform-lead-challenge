@@ -1,0 +1,13 @@
+{
+  "id": "shopify_order_006",
+  "shopify_customer_id": "cust_shopify_001",
+  "email": "jane.doe@example.com",
+  "phone": "+61412345678",
+  "device_id": "device_abc123",
+  "created_at": "2026-05-02T09:05:00Z",
+  "total_price": "145.00",
+  "line_items": [
+    { "title": "KIC Leggings", "quantity": 1 },
+    { "title": "KIC Sports Bra", "quantity": 2 }
+  ]
+}

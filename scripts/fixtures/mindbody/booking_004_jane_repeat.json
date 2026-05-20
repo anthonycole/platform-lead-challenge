@@ -1,0 +1,9 @@
+{
+  "id": "mb_booking_004",
+  "mindbody_client_id": "mb_client_001",
+  "client_email": "jane.doe@gmail.com",
+  "phone": "+61412345678",
+  "class_name": "Vinyasa Flow",
+  "scheduled_at": "2026-05-06T08:00:00Z",
+  "studio": "KIC South Yarra"
+}
