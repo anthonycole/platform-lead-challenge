@@ -4,7 +4,7 @@ import type {
   ShopifyOrderPayload,
   SignalConfidence,
   SignalType,
-} from "@/types/webhooks";
+} from "@/types";
 
 const CONFIDENCE: Record<SignalType, SignalConfidence> = {
   email: "deterministic",

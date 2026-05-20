@@ -1,5 +1,5 @@
 import type { CustomerView } from "@/lib/timeline";
-import type { ShopifyOrderPayload } from "@/types/webhooks";
+import type { ShopifyOrderPayload } from "@/types";
 
 export type CustomerMetrics = {
   orderCount: number;

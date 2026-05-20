@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { extractMindbodySignals } from "@/lib/signals";
 import { resolveAndIngest } from "@/lib/resolver";
 import { logger } from "@/lib/logger";
-import { MindbodyBookingPayloadSchema } from "@/types/webhooks";
+import { MindbodyBookingPayloadSchema } from "@/types";
 
 export const runtime = "nodejs";
 

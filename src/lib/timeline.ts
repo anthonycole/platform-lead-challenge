@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db";
 import { normaliseSignal } from "@/lib/signals";
-import type { SignalType } from "@/types/webhooks";
+import type { SignalType } from "@/types";
 
 const LOOKUP_TYPES: SignalType[] = [
   "email",

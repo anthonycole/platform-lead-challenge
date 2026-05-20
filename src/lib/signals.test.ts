@@ -7,7 +7,7 @@ import {
 import type {
   MindbodyBookingPayload,
   ShopifyOrderPayload,
-} from "@/types/webhooks";
+} from "@/types";
 
 describe("normaliseSignal", () => {
   it("lowercases and trims email", () => {

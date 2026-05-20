@@ -203,7 +203,7 @@ vi.mock("@/lib/db", () => {
 });
 
 import { resolveAndIngest, RESOLVER_VERSION } from "./resolver";
-import type { ExtractedSignal } from "@/types/webhooks";
+import type { ExtractedSignal } from "@/types";
 
 beforeEach(() => {
   store = { customers: [], signals: [], events: [], merges: [], clock: 0 };

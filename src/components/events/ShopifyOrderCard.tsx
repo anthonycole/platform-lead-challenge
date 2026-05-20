@@ -2,7 +2,7 @@
 
 import { Card, Pane, Badge, Heading, Text, Paragraph } from "evergreen-ui";
 import type { CustomerView } from "@/lib/timeline";
-import type { ShopifyOrderPayload } from "@/types/webhooks";
+import type { ShopifyOrderPayload } from "@/types";
 
 interface ShopifyOrderCardProps {
   event: CustomerView["events"][number];

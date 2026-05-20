@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db";
-import type { ExtractedSignal } from "@/types/webhooks";
+import type { ExtractedSignal } from "@/types";
 import type { PrismaClient } from "@/generated/prisma/client";
 
 export const RESOLVER_VERSION = "v1.0.0";

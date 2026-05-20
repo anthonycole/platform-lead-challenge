@@ -2,7 +2,7 @@
 
 import { Card, Pane, Badge, Heading, Text, Paragraph } from "evergreen-ui";
 import type { CustomerView } from "@/lib/timeline";
-import type { MindbodyBookingPayload } from "@/types/webhooks";
+import type { MindbodyBookingPayload } from "@/types";
 
 interface MindbodyBookingCardProps {
   event: CustomerView["events"][number];

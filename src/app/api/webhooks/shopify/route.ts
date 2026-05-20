@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { extractShopifySignals } from "@/lib/signals";
 import { resolveAndIngest } from "@/lib/resolver";
 import { logger } from "@/lib/logger";
-import { ShopifyOrderPayloadSchema } from "@/types/webhooks";
+import { ShopifyOrderPayloadSchema } from "@/types";
 
 export const runtime = "nodejs";
 
